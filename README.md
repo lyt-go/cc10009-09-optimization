@@ -60,6 +60,7 @@ npm run dev
 | 采集质量 | `qualityreport` | 质量报告 | 报告编号、作业编号、总URL数 |
 | 带宽控制 | `bandwidth` | 带宽策略 | 策略编号、节点标识、下载带宽上限 |
 | 重试队列 | `retryqueue` | 重试条目 | 条目编号、失败URL、失败原因码 |
+| 任务执行侧 | `taskexec` | 作业执行进度 / 结果索引 | 进度编号、作业编号、作业版本、唯一URL集合 |
 | 翻页管理 | `pagemarker` | 翻页规则 | 规则编号、目标站点、翻页类型 |
 | 增量标记 | `incrementmark` | 增量水位 | 水位编号、目标源、增量字段名 |
 | 配置同步 | `configsync` | 同步任务 | 任务编号、源节点、目标节点 |
@@ -73,6 +74,48 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 失败URL重试与作业执行进度
+
+失败URL的唯一定位键是「作业编号 + 作业版本 + 规范化URL」，规范化逻辑在
+`backend/app/services/urlnorm.py`，与作业上的「URL去重策略」保持一致：
+
+- 同一作业版本内，一个规范化URL只有一条重试条目；登记时命中已有条目只合并原因码；
+- 重放（网络中断后的补同步、重复提交）按 `幂等键` 幂等，不重复生成条目；
+- 重试成功后条目移出队列，失败则按退避次数留在队列，达到上限才进最终失败清单；
+- 作业结束（`完成作业` / `停止作业`）之后晚到的重试结果只归档，不会把作业带回执行中；
+- 作业 `启动作业` 时版本号递增，上一版本的重试结果仍挂在上一版本的进度上。
+
+任务执行侧接口（`/api/taskexec`）：
+
+| 接口 | 用途 |
+| --- | --- |
+| `POST /results` | 接收重试结果并回写原作业进度（支持幂等键） |
+| `GET /progress` | 作业执行进度，同一作业版本只会有一条 |
+| `GET /manifest` | 结果索引清单，落到任务执行侧，可从清单回查进度 |
+| `GET /audit?job=&version=` | 按同一URL集合核对计数、明细、版本依据 |
+| `GET /reconcile` | 两侧计数核对（队列 / 索引清单 / 进度） |
+| `GET /dataset/progress` | 作业执行进度数据集 |
+| `GET /dataset/retry-results` | 重试结果数据集（与进度数据集共用同一URL集合） |
+
+重试队列接口（`/api/retryqueue`）新增：
+
+| 接口 | 用途 |
+| --- | --- |
+| `POST /failures` | 读取失败页面，按唯一URL合并重试条目 |
+| `POST /reconnect-sync` | 补同步重放，按幂等键去重 |
+| `GET /reasons` | 按原因码检索、统计并定位到具体重试记录 |
+| `GET /reconcile` | 队列视角的两侧核对 |
+
+`GET /api/retryqueue` 支持 `reason`、`job`、`version`、`url`、`scope`
+（`unconverged` / `converged` / `final_failed`）等筛选参数。
+
+回归用例（标准库 unittest，无需额外安装）：
+
+```bash
+cd backend
+PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -v
+```
 
 领域：数据工程
 子方向：数据采集、爬虫与RPA

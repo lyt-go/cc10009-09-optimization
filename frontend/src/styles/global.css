@@ -33,3 +33,18 @@ body { margin: 0; background: #f6f8fb; color: #1f2937; }
 .link { border: none; background: none; color: var(--brand); cursor: pointer; padding: 0; }
 .page-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .error-text { color: #b42318; }
+.ok-text { color: #067647; }
+.muted-text { color: var(--muted); font-size: 12px; }
+.section-title { font-size: 14px; margin: 18px 0 8px; }
+.audit-summary { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.conflict-box {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #f0c36d;
+  background: #fffaeb;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #7a4d05;
+}
+.data-table tr.row-selected td { background: #eef4ff; }
+.data-table select { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; }

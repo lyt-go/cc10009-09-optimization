@@ -22,10 +22,83 @@ class ActionResult(BaseModel):
 
 
 class EntryPayload(BaseModel):
-    """登记或修改一条业务记录时提交的字段集合。"""
+    """登记或修改一条业务记录时提交的字段集合。
+
+    既接受 ``{"values": {...}}``，也接受把字段直接写在顶层；两种写法由
+    ``values_of`` 合并，动作名由 ``action_of`` 统一读取。
+    """
+
+    model_config = {"extra": "allow"}
 
     values: dict[str, Any] = Field(default_factory=dict)
     remark: str | None = None
+    action: str | None = None
+
+
+def values_of(payload: EntryPayload) -> dict[str, Any]:
+    """合并嵌套 values 与顶层字段，顶层显式传入的字段优先。"""
+    merged = dict(payload.values)
+    for key, value in (payload.model_extra or {}).items():
+        if key not in {"values", "remark"}:
+            merged.setdefault(key, value)
+    return merged
+
+
+def action_of(payload: EntryPayload) -> str:
+    """从两种载荷写法里取出动作名。"""
+    value = payload.values.get("action")
+    if value is None:
+        value = payload.action
+    return str(value or "").strip()
+
+
+class FailurePage(BaseModel):
+    """失败页面上报的单条记录；只带URL与原因码时也能登记。"""
+
+    model_config = {"extra": "allow"}
+
+    url: str | None = None
+    失败URL: str | None = None
+    reason: str | None = None
+    失败原因码: str | None = None
+
+
+class FailureBatchPayload(BaseModel):
+    """批量登记失败页面：读取失败页面时提交的原始清单。"""
+
+    model_config = {"extra": "allow"}
+
+    job: str | None = None
+    作业编号: str | None = None
+    作业版本: str | int | None = None
+    failures: list[FailurePage | str] = Field(default_factory=list)
+    失败页面列表: list[FailurePage | str] = Field(default_factory=list)
+    幂等键: str | None = None
+    失败原因码: str | None = None
+
+
+class RetryResultPayload(BaseModel):
+    """任务执行侧回写的重试结果。"""
+
+    model_config = {"extra": "allow"}
+
+    job: str | None = None
+    作业编号: str | None = None
+    作业版本: str | int | None = None
+    url: str | None = None
+    失败URL: str | None = None
+    规范化URL: str | None = None
+    result: str | None = None
+    结果: str | None = None
+    失败原因码: str | None = None
+    尝试次数: str | int | None = None
+    已重试次数: str | int | None = None
+    幂等键: str | None = None
+    收到时间: str | None = None
+    回写来源: str | None = None
+
+    def values(self) -> dict[str, Any]:
+        return {key: value for key, value in self.model_dump().items() if value is not None}
 
 
 
